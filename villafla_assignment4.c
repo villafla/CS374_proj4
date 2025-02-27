@@ -25,6 +25,7 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <fcntl.h>  
 
 #define INPUT_LENGTH 2048
 #define MAX_ARGS 512
@@ -40,10 +41,6 @@ struct command_line {
 
 // Global variable to track last exit status
 int last_exit_status = 0;
-
-// // Function Prototypes
-// bool handle_builtin_commands(struct command_line *cmd);
-// void execute_command(struct command_line *cmd);
 
 // Function to parse user input
 // Citation: Module Input Handling
@@ -126,43 +123,74 @@ bool handle_builtin_commands(struct command_line *cmd) {
     return false;
 }
 
-// Function to execute non-built-in commands
+// Function to execute non-built-in commands with I/O redirection
 // Citation: Modules Process API, Exec API
-void execute_command(struct command_line *cmd) {
+void execute_command(struct command_line *cmd, pid_t *bg_pids, int *bg_count) {
     pid_t spawn_pid = fork();
 
     if (spawn_pid == -1) {
         perror("fork failed");
-        last_exit_status = 1;
-        return;
-    }
-
-    if (spawn_pid == 0) {
+        exit(1);
+    } else if (spawn_pid == 0) {
         // Child process
-        execvp(cmd->argv[0], cmd->argv);
 
-        // If execvp() fails, print error and exit
-        perror("command not found");
+        // Handle input redirection
+        if (cmd->input_file) {
+            int input_fd = open(cmd->input_file, O_RDONLY);
+            if (input_fd == -1) {
+                perror("cannot open input file");
+                exit(1);
+            }
+            dup2(input_fd, 0); // Redirect stdin
+            close(input_fd);
+        } 
+        // Redirect stdin to /dev/null for background processes if no input file given
+        else if (cmd->is_bg) {
+            int dev_null = open("/dev/null", O_RDONLY);
+            dup2(dev_null, 0);
+            close(dev_null);
+        }
+
+        // Handle output redirection
+        if (cmd->output_file) {
+            int output_fd = open(cmd->output_file, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+            if (output_fd == -1) {
+                perror("cannot open output file");
+                exit(1);
+            }
+            dup2(output_fd, 1); // Redirect stdout
+            close(output_fd);
+        } 
+        // Redirect stdout to /dev/null for background processes if no output file given
+        else if (cmd->is_bg) {
+            int dev_null = open("/dev/null", O_WRONLY);
+            dup2(dev_null, 1);
+            close(dev_null);
+        }
+
+        // Execute the command
+        execvp(cmd->argv[0], cmd->argv);
+        
+        // If execvp fails
+        perror("execvp failed");
         exit(1);
     } 
     else {
         // Parent process
         if (cmd->is_bg) {
-            // Background process: Print PID and do NOT wait
             printf("background pid is %d\n", spawn_pid);
             fflush(stdout);
-        } 
-        else {
-            // Foreground process: Wait for it to finish
+            bg_pids[(*bg_count)++] = spawn_pid;  // Store background PID
+        } else {
+            // Foreground process: wait for child to finish
             int child_status;
             waitpid(spawn_pid, &child_status, 0);
-
             if (WIFEXITED(child_status)) {
                 last_exit_status = WEXITSTATUS(child_status);
-            } 
-            else if (WIFSIGNALED(child_status)) {
+            } else if (WIFSIGNALED(child_status)) {
                 last_exit_status = WTERMSIG(child_status);
                 printf("terminated by signal %d\n", last_exit_status);
+                fflush(stdout);
             }
         }
     }
@@ -170,70 +198,34 @@ void execute_command(struct command_line *cmd) {
 
 int main() {
     struct command_line *curr_command;
-    pid_t bg_pids[100]; // Array to store background process PIDs
-    int bg_count = 0;    // Number of background processes
+    pid_t bg_pids[MAX_ARGS];  // Store background PIDs
+    int bg_count = 0;         // Number of background processes
     
     while (true) {
-        // Periodically check background processes before showing prompt
+        // Check for finished background processes BEFORE showing prompt
         for (int i = 0; i < bg_count; i++) {
             int child_status;
             pid_t result = waitpid(bg_pids[i], &child_status, WNOHANG);
-            if (result > 0) { // Background process has finished
-                printf("background pid %d is done: ", bg_pids[i]);
+            if (result > 0) { // Background process finished
                 if (WIFEXITED(child_status)) {
-                    printf("exit value %d\n", WEXITSTATUS(child_status));
+                    printf("background pid %d is done: exit value %d\n", result, WEXITSTATUS(child_status));
                 } else if (WIFSIGNALED(child_status)) {
-                    printf("terminated by signal %d\n", WTERMSIG(child_status));
+                    printf("background pid %d is done: terminated by signal %d\n", result, WTERMSIG(child_status));
                 }
                 fflush(stdout);
-                // Remove PID from array by shifting left
-                for (int j = i; j < bg_count - 1; j++) {
-                    bg_pids[j] = bg_pids[j + 1];
-                }
-                bg_count--; // Reduce background count
-                i--; // Adjust index after removal
+                // Remove from list
+                bg_pids[i] = bg_pids[--bg_count];  
             }
         }
 
         curr_command = parse_input();
-        
-        if (!curr_command) {
-            continue;  // Ignore blank/comment lines
-        }
+        if (!curr_command) continue;  // Ignore blank/comment lines
         
         if (!handle_builtin_commands(curr_command)) {
-            pid_t spawn_pid = fork();
-
-            if (spawn_pid == -1) {
-                perror("fork failed");
-                exit(1);
-            } else if (spawn_pid == 0) {
-                // Child process executes the command
-                execvp(curr_command->argv[0], curr_command->argv);
-                perror("execvp failed"); // Only runs if execvp fails
-                exit(1);
-            } else {
-                // Parent process
-                if (curr_command->is_bg) {
-                    // Background process: Print PID and store it
-                    printf("background pid is %d\n", spawn_pid);
-                    fflush(stdout);
-                    bg_pids[bg_count++] = spawn_pid;
-                } else {
-                    // Foreground process: Wait for completion
-                    int child_status;
-                    waitpid(spawn_pid, &child_status, 0);
-                    if (WIFEXITED(child_status)) {
-                        last_exit_status = WEXITSTATUS(child_status);
-                    } else if (WIFSIGNALED(child_status)) {
-                        last_exit_status = WTERMSIG(child_status);
-                        printf("terminated by signal %d\n", last_exit_status);
-                    }
-                }
-            }
+            execute_command(curr_command, bg_pids, &bg_count);
         }
-        
-        // Free allocated memory
+
+        // Free memory
         for (int i = 0; i < curr_command->argc; i++) {
             free(curr_command->argv[i]);
         }
@@ -241,9 +233,6 @@ int main() {
         free(curr_command->output_file);
         free(curr_command);
     }
-
     return EXIT_SUCCESS;
 }
-
-
 
