@@ -23,6 +23,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
+#include <unistd.h>
 
 #define INPUT_LENGTH 2048
 #define MAX_ARGS 512
@@ -35,6 +36,9 @@ struct command_line {
     char *output_file;         // Output file (if any)
     bool is_bg;                // Background process flag
 };
+
+// Global variable to track last exit status
+int last_exit_status = 0;
 
 // Function to parse user input
 struct command_line *parse_input() {
@@ -74,6 +78,30 @@ struct command_line *parse_input() {
     }
     curr_command->argv[curr_command->argc] = NULL;  // Null-terminate argv
     return curr_command;
+}
+
+// Function to handle built-in commands
+bool handle_builtin_commands(struct command_line *cmd) {
+    if (cmd->argc == 0) return false;
+    
+    if (strcmp(cmd->argv[0], "exit") == 0) {
+        exit(0);
+    }
+    
+    if (strcmp(cmd->argv[0], "cd") == 0) {
+        const char *target_dir = (cmd->argc > 1) ? cmd->argv[1] : getenv("HOME");
+        if (chdir(target_dir) != 0) {
+            perror("cd");
+        }
+        return true;
+    }
+    
+    if (strcmp(cmd->argv[0], "status") == 0) {
+        printf("exit value %d\n", last_exit_status);
+        return true;
+    }
+    
+    return false;
 }
 
 int main() {
