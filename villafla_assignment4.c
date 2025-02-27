@@ -41,6 +41,10 @@ struct command_line {
 // Global variable to track last exit status
 int last_exit_status = 0;
 
+// Function Prototypes
+bool handle_builtin_commands(struct command_line *cmd);
+void execute_command(struct command_line *cmd);
+
 // Function to parse user input
 // Citation: Module Input Handling
 struct command_line *parse_input() {
@@ -109,29 +113,29 @@ bool handle_builtin_commands(struct command_line *cmd) {
 
 // Function to execute non-built-in commands
 // Citation: Module Process API, Exec API
-// void execute_command(struct command_line *cmd) {
-//     pid_t spawn_pid = fork();
+void execute_command(struct command_line *cmd) {
+    pid_t spawn_pid = fork();
     
-//     if (spawn_pid == -1) {
-//         perror("fork failed");
-//         exit(1);
-//     } else if (spawn_pid == 0) {
-//         // Child process executes the command
-//         execvp(cmd->argv[0], cmd->argv);
-//         perror("execvp failed"); // Only runs if execvp fails
-//         exit(1);
-//     } else {
-//         // Parent process waits for foreground command to finish
-//         int child_status;
-//         waitpid(spawn_pid, &child_status, 0);
-//         if (WIFEXITED(child_status)) {
-//             last_exit_status = WEXITSTATUS(child_status);
-//         } else if (WIFSIGNALED(child_status)) {
-//             last_exit_status = WTERMSIG(child_status);
-//             printf("terminated by signal %d\n", last_exit_status);
-//         }
-//     }
-// }
+    if (spawn_pid == -1) {
+        perror("fork failed");
+        exit(1);
+    } else if (spawn_pid == 0) {
+        // Child process executes the command
+        execvp(cmd->argv[0], cmd->argv);
+        perror("execvp failed"); // Only runs if execvp fails
+        exit(1);
+    } else {
+        // Parent process waits for foreground command to finish
+        int child_status;
+        waitpid(spawn_pid, &child_status, 0);
+        if (WIFEXITED(child_status)) {
+            last_exit_status = WEXITSTATUS(child_status);
+        } else if (WIFSIGNALED(child_status)) {
+            last_exit_status = WTERMSIG(child_status);
+            printf("terminated by signal %d\n", last_exit_status);
+        }
+    }
+}
 
 int main() {
     struct command_line *curr_command;
@@ -142,22 +146,11 @@ int main() {
         if (!curr_command) {
             continue;  // Ignore blank/comment lines
         }
-
-        // Check if command is a built-in command and execute it
-        if (handle_builtin_commands(curr_command)) {
-            // Free allocated memory for built-in command processing
-            for (int i = 0; i < curr_command->argc; i++) {
-                free(curr_command->argv[i]);
-            }
-            free(curr_command->input_file);
-            free(curr_command->output_file);
-            free(curr_command);
-            continue; // Skip execution of non-built-in commands
+        
+        if (!handle_builtin_commands(curr_command)) {
+            execute_command(curr_command);
         }
-
-        // Execute external command if not a built-in command
-        execute_command(curr_command);
-
+        
         // Free allocated memory
         for (int i = 0; i < curr_command->argc; i++) {
             free(curr_command->argv[i]);
