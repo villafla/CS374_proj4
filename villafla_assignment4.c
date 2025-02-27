@@ -17,6 +17,7 @@
 */
 
 // The following code implements the sample parser 
+// Uses material from Input Handling
 
 #include <stdio.h>
 #include <stdlib.h>
