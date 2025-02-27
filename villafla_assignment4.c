@@ -41,9 +41,9 @@ struct command_line {
 // Global variable to track last exit status
 int last_exit_status = 0;
 
-// Function Prototypes
-bool handle_builtin_commands(struct command_line *cmd);
-void execute_command(struct command_line *cmd);
+// // Function Prototypes
+// bool handle_builtin_commands(struct command_line *cmd);
+// void execute_command(struct command_line *cmd);
 
 // Function to parse user input
 // Citation: Module Input Handling
@@ -89,52 +89,41 @@ struct command_line *parse_input() {
 // Function to handle built-in commands
 // Citation: Module Environment Variables
 bool handle_builtin_commands(struct command_line *cmd) {
-    if (cmd->argc == 0) return false;
-    
+    if (cmd->argc == 0) return false;  // Ignore empty commands
+
     if (strcmp(cmd->argv[0], "exit") == 0) {
+        // Terminate any background processes before exiting
+        printf("Exiting shell...\n");
+        fflush(stdout);
         exit(0);
     }
-    
+
     if (strcmp(cmd->argv[0], "cd") == 0) {
+        // Ignore '&' in built-in commands
+        if (cmd->is_bg) {
+            cmd->is_bg = false;
+        }
+
         const char *target_dir = (cmd->argc > 1) ? cmd->argv[1] : getenv("HOME");
+
         if (chdir(target_dir) != 0) {
             perror("cd");
         }
-        return true;
-    }
-    
-    if (strcmp(cmd->argv[0], "status") == 0) {
-        printf("exit value %d\n", last_exit_status);
-        return true;
-    }
-    
-    return false;
-}
 
-// Function to execute non-built-in commands
-// Citation: Module Process API, Exec API
-void execute_command(struct command_line *cmd) {
-    pid_t spawn_pid = fork();
-    
-    if (spawn_pid == -1) {
-        perror("fork failed");
-        exit(1);
-    } else if (spawn_pid == 0) {
-        // Child process executes the command
-        execvp(cmd->argv[0], cmd->argv);
-        perror("execvp failed"); // Only runs if execvp fails
-        exit(1);
-    } else {
-        // Parent process waits for foreground command to finish
-        int child_status;
-        waitpid(spawn_pid, &child_status, 0);
-        if (WIFEXITED(child_status)) {
-            last_exit_status = WEXITSTATUS(child_status);
-        } else if (WIFSIGNALED(child_status)) {
-            last_exit_status = WTERMSIG(child_status);
-            printf("terminated by signal %d\n", last_exit_status);
-        }
+        return true;
     }
+
+    if (strcmp(cmd->argv[0], "status") == 0) {
+        // Print last foreground process exit status
+        if (WIFEXITED(last_exit_status)) {
+            printf("exit value %d\n", WEXITSTATUS(last_exit_status));
+        } else if (WIFSIGNALED(last_exit_status)) {
+            printf("terminated by signal %d\n", WTERMSIG(last_exit_status));
+        }
+        return true;
+    }
+
+    return false;
 }
 
 int main() {
@@ -147,9 +136,11 @@ int main() {
             continue;  // Ignore blank/comment lines
         }
         
+        // Check if it's a built-in command
         if (!handle_builtin_commands(curr_command)) {
-            execute_command(curr_command);
+            printf("Command: %s \n", curr_command->argv[0]);  // future exec() calls
         }
+
         
         // Free allocated memory
         for (int i = 0; i < curr_command->argc; i++) {
