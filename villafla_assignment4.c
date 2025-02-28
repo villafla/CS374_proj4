@@ -33,7 +33,7 @@
 #define MAX_ARGS 512
 
 // Function declaration 
-void handle_sigint(int signo);
+// void handle_SIGINT(int signo);
 
 // Struct to store parsed command
 struct command_line {
@@ -44,8 +44,9 @@ struct command_line {
     bool is_bg;                // Background process flag
 };
 
-// Global variable to track last exit status
-int last_exit_status = 0;
+// Global variables 
+int last_exit_status = 0;       // Tracks last exit status
+int foreground_only_mode = 0;   // Tracks foreground-only mode, 1 = enabled, 0 = disabled
 
 // Function to parse user input
 // Citation: Module Input Handling
@@ -131,6 +132,11 @@ bool handle_builtin_commands(struct command_line *cmd) {
 // Function to execute non-built-in commands with I/O redirection
 // Citation: Modules Process API, Exec API
 void execute_command(struct command_line *cmd, pid_t *bg_pids, int *bg_count) {
+    // If foreground-only mode is enabled, force command to run in foreground
+    if (foreground_only_mode) {
+        cmd->is_bg = false;
+    }
+    
     pid_t spawn_pid = fork();
 
     if (spawn_pid == -1) {
@@ -210,12 +216,30 @@ void execute_command(struct command_line *cmd, pid_t *bg_pids, int *bg_count) {
 
 
 // Function Signal handler for SIGINT (Ctrl+C) - prevents shell termination
-// Citation: API Signal Handling
-void handle_sigint(int signo) {
+// Citation: Signal Handling API 
+void handle_SIGINT(int signo) {
     write(STDOUT_FILENO, "\n: ", 3); // Show prompt again
     fflush(stdout);
 }
 
+// Function Signal hanlder for SIGTSTP (Ctrl+Z) - toggles foreground-only mode
+// Citation: Signal Handling API 
+void handle_SIGTSTP(int signo) {
+    char* message;
+    
+    if (foreground_only_mode) {
+        foreground_only_mode = 0;
+        message = "\nExiting foreground-only mode\n: ";
+    } else {
+        foreground_only_mode = 1;
+        message = "\nEntering foreground-only mode (& is now ignored)\n: ";
+    }
+    
+    write(STDOUT_FILENO, message, strlen(message)); // Use write() instead of printf()
+    fflush(stdout);
+}
+
+// Citation: Signal Handling API
 int main() {
     struct command_line *curr_command;
     pid_t bg_pids[MAX_ARGS];  // Store background PIDs
@@ -227,6 +251,13 @@ int main() {
     sigfillset(&sa_sigint.sa_mask);
     sa_sigint.sa_flags = SA_RESTART; // Restart interrupted syscalls
     sigaction(SIGINT, &sa_sigint, NULL);
+
+    // Set up SIGTSTP handler (Ctrl+Z toggles foreground-only mode)
+    struct sigaction sa_sigtstp = {0};
+    sa_sigtstp.sa_handler = handle_SIGTSTP;
+    sigfillset(&sa_sigtstp.sa_mask);
+    sa_sigtstp.sa_flags = SA_RESTART;
+    sigaction(SIGTSTP, &sa_sigtstp, NULL);
 
     while (true) {
         // Check for finished background processes BEFORE showing prompt
@@ -243,7 +274,7 @@ int main() {
                 // Remove from list
                 bg_pids[i] = bg_pids[--bg_count];  
             }
-        }        
+        }
 
         curr_command = parse_input();
         if (!curr_command) continue;  // Ignore blank/comment lines
