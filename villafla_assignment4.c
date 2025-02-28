@@ -16,7 +16,6 @@
 *                      - Implements custom handlers for 2 signals, SIGINT SIGTSTP
 */
 
-// 150/170 on Gradescope 
 // The following code implements the sample parser 
 
 #include <stdio.h>
@@ -32,8 +31,6 @@
 #define INPUT_LENGTH 2048
 #define MAX_ARGS 512
 
-// Function declaration 
-// void handle_SIGINT(int signo);
 
 // Struct to store parsed command
 struct command_line {
