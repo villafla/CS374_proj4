@@ -95,7 +95,6 @@ bool handle_builtin_commands(struct command_line *cmd) {
 
     if (strcmp(cmd->argv[0], "exit") == 0) {
         // Terminate any background processes before exiting
-        // printf("Exiting shell...\n");
         fflush(stdout);
         exit(0);
     }
@@ -116,14 +115,15 @@ bool handle_builtin_commands(struct command_line *cmd) {
     }
 
     if (strcmp(cmd->argv[0], "status") == 0) {
-        // Print last foreground process exit status
         if (WIFEXITED(last_exit_status)) {
-            printf("exit value %d\n", WEXITSTATUS(last_exit_status));
+            printf("exit value %d\n", WEXITSTATUS(last_exit_status)); 
         } else if (WIFSIGNALED(last_exit_status)) {
-            printf("terminated by signal %d\n", WTERMSIG(last_exit_status));
+            printf("terminated by signal %d\n", WTERMSIG(last_exit_status)); 
         }
+        fflush(stdout);
         return true;
     }
+       
 
     return false;
 }
@@ -148,13 +148,13 @@ void execute_command(struct command_line *cmd, pid_t *bg_pids, int *bg_count) {
         if (cmd->input_file) {
             int input_fd = open(cmd->input_file, O_RDONLY);
             if (input_fd == -1) {
-                perror("cannot open input file");
+                fprintf(stderr, "%s: cannot open %s for input\n", cmd->argv[0], cmd->input_file);
                 exit(1);
             }
             dup2(input_fd, 0); // Redirect stdin
             close(input_fd);
         } 
-        // Redirect stdin to /dev/null for background processes if no input file given
+        // Redirect stdin to /dev/null for background processes if no input file is given
         else if (cmd->is_bg) {
             int dev_null = open("/dev/null", O_RDONLY);
             dup2(dev_null, 0);
@@ -165,13 +165,13 @@ void execute_command(struct command_line *cmd, pid_t *bg_pids, int *bg_count) {
         if (cmd->output_file) {
             int output_fd = open(cmd->output_file, O_WRONLY | O_CREAT | O_TRUNC, 0644);
             if (output_fd == -1) {
-                perror("cannot open output file");
+                fprintf(stderr, "%s: cannot open %s for output\n", cmd->argv[0], cmd->output_file);
                 exit(1);
             }
             dup2(output_fd, 1); // Redirect stdout
             close(output_fd);
         } 
-        // Redirect stdout to /dev/null for background processes if no output file given
+        // Redirect stdout to /dev/null for background processes if no output file is given
         else if (cmd->is_bg) {
             int dev_null = open("/dev/null", O_WRONLY);
             dup2(dev_null, 1);
@@ -181,8 +181,8 @@ void execute_command(struct command_line *cmd, pid_t *bg_pids, int *bg_count) {
         // Execute the command
         execvp(cmd->argv[0], cmd->argv);
         
-        // If execvp fails
-        perror("execvp failed");
+        // If execvp fails, print error message correctly
+        perror(cmd->argv[0]);  // Prints "<command>: error message"
         exit(1);
     } 
     else {
@@ -195,16 +195,19 @@ void execute_command(struct command_line *cmd, pid_t *bg_pids, int *bg_count) {
             // Foreground process: wait for child to finish
             int child_status;
             waitpid(spawn_pid, &child_status, 0);
+
             if (WIFEXITED(child_status)) {
-                last_exit_status = WEXITSTATUS(child_status);
+                last_exit_status = child_status; // store full status
             } else if (WIFSIGNALED(child_status)) {
-                last_exit_status = WTERMSIG(child_status);
-                printf("terminated by signal %d\n", last_exit_status);
+                last_exit_status = child_status; // store full status
+                printf("terminated by signal %d\n", WTERMSIG(child_status));
                 fflush(stdout);
             }
+            
         }
     }
 }
+
 
 // Function Signal handler for SIGINT (Ctrl+C) - prevents shell termination
 // Citation: API Signal Handling
@@ -240,7 +243,7 @@ int main() {
                 // Remove from list
                 bg_pids[i] = bg_pids[--bg_count];  
             }
-        }
+        }        
 
         curr_command = parse_input();
         if (!curr_command) continue;  // Ignore blank/comment lines
