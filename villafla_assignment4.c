@@ -247,7 +247,7 @@ int main() {
 
     // Set up SIGINT handler (Ctrl+C should NOT terminate the shell)
     struct sigaction sa_sigint = {0};
-    sa_sigint.sa_handler = handle_sigint; // Ignore SIGINT
+    sa_sigint.sa_handler = handle_SIGINT; // Ignore SIGINT
     sigfillset(&sa_sigint.sa_mask);
     sa_sigint.sa_flags = SA_RESTART; // Restart interrupted syscalls
     sigaction(SIGINT, &sa_sigint, NULL);
