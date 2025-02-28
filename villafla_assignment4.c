@@ -33,8 +33,7 @@
 #define MAX_ARGS 512
 
 // Function declaration 
-void handle_SIGINT(int signo);
-
+void handle_sigint(int signo);
 
 // Struct to store parsed command
 struct command_line {
@@ -142,7 +141,7 @@ void execute_command(struct command_line *cmd, pid_t *bg_pids, int *bg_count) {
 
         // Restore SIGINT default behavior for foreground processes
         struct sigaction sa_child = {0};
-        sa_child.sa_handler = SIG_DFL; // Restore default handling
+        sa_child.sa_handler = SIG_DFL;
         sigaction(SIGINT, &sa_child, NULL);
 
         // Handle input redirection
@@ -187,13 +186,7 @@ void execute_command(struct command_line *cmd, pid_t *bg_pids, int *bg_count) {
         exit(1);
     } 
     else {
-        // Parent process: Ignore SIGINT while waiting for foreground process
-        if (!cmd->is_bg) {
-            struct sigaction ignore_action = {0};
-            ignore_action.sa_handler = SIG_IGN;
-            sigaction(SIGINT, &ignore_action, NULL);
-        }
-
+        // Parent process
         if (cmd->is_bg) {
             printf("background pid is %d\n", spawn_pid);
             fflush(stdout);
@@ -202,12 +195,6 @@ void execute_command(struct command_line *cmd, pid_t *bg_pids, int *bg_count) {
             // Foreground process: wait for child to finish
             int child_status;
             waitpid(spawn_pid, &child_status, 0);
-
-            // Restore SIGINT default behavior after foreground process finishes
-            struct sigaction default_action = {0};
-            default_action.sa_handler = handle_SIGINT;  // Restore shell's handler
-            sigaction(SIGINT, &default_action, NULL);
-
             if (WIFEXITED(child_status)) {
                 last_exit_status = WEXITSTATUS(child_status);
             } else if (WIFSIGNALED(child_status)) {
@@ -216,20 +203,13 @@ void execute_command(struct command_line *cmd, pid_t *bg_pids, int *bg_count) {
                 fflush(stdout);
             }
         }
-
-        // Restore SIGINT handler for shell before returning to main loop
-        struct sigaction restore_action = {0};
-        restore_action.sa_handler = handle_SIGINT;
-        sigaction(SIGINT, &restore_action, NULL);
     }
 }
 
-
 // Function Signal handler for SIGINT (Ctrl+C) - prevents shell termination
 // Citation: API Signal Handling
-void handle_SIGINT(int signo) {
-    char* message = "\nCaught SIGINT, press enter to continue\n: ";
-    write(STDOUT_FILENO, message, 40);  // Use write() to avoid printf issues
+void handle_sigint(int signo) {
+    write(STDOUT_FILENO, "\n: ", 3); // Show prompt again
     fflush(stdout);
 }
 
@@ -239,13 +219,11 @@ int main() {
     int bg_count = 0;         // Number of background processes
 
     // Set up SIGINT handler (Ctrl+C should NOT terminate the shell)
-    struct sigaction SIGINT_action = {0};  // Zero out struct
-    SIGINT_action.sa_handler = handle_SIGINT; // Register custom handler
-    sigfillset(&SIGINT_action.sa_mask);  // Block all signals during handling
-    SIGINT_action.sa_flags = SA_RESTART;  // Auto-restart interrupted syscalls
-
-    // Install SIGINT handler for the shell
-    sigaction(SIGINT, &SIGINT_action, NULL);
+    struct sigaction sa_sigint = {0};
+    sa_sigint.sa_handler = handle_sigint; // Ignore SIGINT
+    sigfillset(&sa_sigint.sa_mask);
+    sa_sigint.sa_flags = SA_RESTART; // Restart interrupted syscalls
+    sigaction(SIGINT, &sa_sigint, NULL);
 
     while (true) {
         // Check for finished background processes BEFORE showing prompt
@@ -263,9 +241,6 @@ int main() {
                 bg_pids[i] = bg_pids[--bg_count];  
             }
         }
-
-        // Restore SIGINT handler before displaying the prompt
-        sigaction(SIGINT, &SIGINT_action, NULL); // Ensure SIGINT handling is correct
 
         curr_command = parse_input();
         if (!curr_command) continue;  // Ignore blank/comment lines
