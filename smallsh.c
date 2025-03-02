@@ -14,14 +14,14 @@ int main() {
 
     // Set up SIGINT handler (Ctrl+C should NOT terminate the shell)
     struct sigaction sa_sigint = {0};
-    sa_sigint.sa_handler = handle_SIGINT; // Ignore SIGINT
+    sa_sigint.sa_handler = signal_SIGINT; // Ignore SIGINT
     sigfillset(&sa_sigint.sa_mask);
     sa_sigint.sa_flags = SA_RESTART; // Restart interrupted syscalls
     sigaction(SIGINT, &sa_sigint, NULL);
 
     // Set up SIGTSTP handler (Ctrl+Z toggles foreground-only mode)
     struct sigaction sa_sigtstp = {0};
-    sa_sigtstp.sa_handler = handle_SIGTSTP;
+    sa_sigtstp.sa_handler = signal_SIGTSTP;
     sigfillset(&sa_sigtstp.sa_mask);
     sa_sigtstp.sa_flags = SA_RESTART;
     sigaction(SIGTSTP, &sa_sigtstp, NULL);
@@ -45,9 +45,9 @@ int main() {
 
         curr_command = parse_input();
         if (!curr_command) continue;  // Ignore blank/comment lines
-        
-        if (!handle_builtin_commands(curr_command, bg_pids, &bg_count)) {
-            execute_command(curr_command, bg_pids, &bg_count);
+
+        if (!builtin_commands(curr_command, bg_pids, &bg_count)) {
+            execute_other_commands(curr_command, bg_pids, &bg_count);
         }
         
 
