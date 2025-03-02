@@ -56,12 +56,16 @@ bool builtin_commands(struct command_line *cmd, pid_t *bg_pids, int *bg_count) {
             break;
 
         case 1: // "cd"
+            // Prevent cd from running in the bg
             if (cmd->is_bg) cmd->is_bg = false;
+            // If an argument is provided, use it as the target directory
             const char *target_dir = (cmd->argc > 1) ? cmd->argv[1] : getenv("HOME");
+            // Change directory and handle errors
             if (chdir(target_dir) != 0) perror("cd");
             return true;
 
         case 2: // "status"
+            // Print status or termination signal of the last fg process
             if (WIFEXITED(last_exit_status)) {
                 printf("exit value %d\n", WEXITSTATUS(last_exit_status)); 
             } else if (WIFSIGNALED(last_exit_status)) {
@@ -76,44 +80,6 @@ bool builtin_commands(struct command_line *cmd, pid_t *bg_pids, int *bg_count) {
 
     return true;    // Command was handled
 }
-
-// bool builtin_commands(struct command_line *cmd, pid_t *bg_pids, int *bg_count) {
-//     if (cmd->argc == 0) return false;   // Ignore empty commands
-
-//     // Handle "exit" command
-//     if (strcmp(cmd->argv[0], "exit") == 0) {
-//         // Kill all background processes before exiting
-//         for (int i = 0; i < *bg_count; i++) { 
-//             kill(bg_pids[i], SIGTERM);
-//         }
-//         exit(0);
-//     }
-
-//     // Handle "cd" command
-//     if (strcmp(cmd->argv[0], "cd") == 0) {
-//         // Prevent cd from running in the bg
-//         if (cmd->is_bg) cmd->is_bg = false;
-//         // If an argument is provided, use it as the target directory
-//         const char *target_dir = (cmd->argc > 1) ? cmd->argv[1] : getenv("HOME");
-//         // Change directory and handle errors
-//         if (chdir(target_dir) != 0) perror("cd");
-//         return true;
-//     }
-
-//     // Handle "status" command
-//     if (strcmp(cmd->argv[0], "status") == 0) {
-//         // Print the exit status or termination signal of the last fg process
-//         if (WIFEXITED(last_exit_status)) {
-//             printf("exit value %d\n", WEXITSTATUS(last_exit_status)); 
-//         } else if (WIFSIGNALED(last_exit_status)) {
-//             printf("terminated by signal %d\n", WTERMSIG(last_exit_status)); 
-//         }
-//         fflush(stdout);
-//         return true;
-//     }
-
-//     return false;
-// }
 
 /*
 * Function: execute_other_commands
