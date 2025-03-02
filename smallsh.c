@@ -1,12 +1,49 @@
+/*
+* Program Name: Programming Assignment 4: SMALLSH
+* Author: Allyson Villaflor
+* Email: villafla@oregonstate.edu
+* CS 374 - Operating Systems I
+* Program description: This program creates a shell called smallsh. smallsh implements a subset
+*                      if well-known shells, such as bash. The program does the following:
+*          
+*                      - Provides a prompt for running commands
+*                      - Handles blank lines and comments, which are lines beginning with the # character
+*                      - Executes 3 commands exit, cd, and status via code built into the shell
+*                      - Executes other commands by creating new processes using a function from 
+*                        the exec() family of functions
+*                      - Supports input and output redirection
+*                      - Supports running commands in foregrounf and background processes
+*                      - Implements custom handlers for 2 signals, SIGINT SIGTSTP
+*/
+
+/*
+* Citation: The following program adapts code Exploration: Signal
+* Handling API and Exploration: Process API - Creating and Terminating Processes. 
+*/
+
+/*
+* Function: main
+* ----------------------------------
+* The entry point of the program. Initializes signal handlers,
+* handles user input, and manages background processes.
+* This function continuously prompts the user for commands,
+* processes input, executes built-in or external commands,
+* and handles foreground/background execution.
+* 
+* Arguments: None.
+* 
+* Returns: int - EXIT_SUCCESS (0) if the program runs successfully.
+*/
+
 #include "smallsh.h"
 #include "parser.h"
 #include "commands.h"
 #include "signals.h"
 
-int last_exit_status = 0;
-int foreground_only_mode = 0;
+// Global variables
+int last_exit_status = 0;       // Tracks last exit status
+int foreground_only_mode = 0;   // Tracks foreground only mode, 1 = enabled, 0 = disabled
 
-// Citation: Signal Handling API
 int main() {
     struct command_line *curr_command;
     pid_t bg_pids[MAX_ARGS];  // Store background PIDs
@@ -16,7 +53,7 @@ int main() {
     struct sigaction sa_sigint = {0};
     sa_sigint.sa_handler = signal_SIGINT; // Ignore SIGINT
     sigfillset(&sa_sigint.sa_mask);
-    sa_sigint.sa_flags = SA_RESTART; // Restart interrupted syscalls
+    sa_sigint.sa_flags = SA_RESTART; // Restart interrupted system calls
     sigaction(SIGINT, &sa_sigint, NULL);
 
     // Set up SIGTSTP handler (Ctrl+Z toggles foreground-only mode)
@@ -42,16 +79,18 @@ int main() {
                 bg_pids[i] = bg_pids[--bg_count];  
             }
         }
-
+        
+        // Get and process user input
         curr_command = parse_input();
         if (!curr_command) continue;  // Ignore blank/comment lines
 
+        // Check if command is a built-in command, otherwise execute external
         if (!builtin_commands(curr_command, bg_pids, &bg_count)) {
             execute_other_commands(curr_command, bg_pids, &bg_count);
         }
         
 
-        // Free memory
+        // Free memory allocate memory for command
         for (int i = 0; i < curr_command->argc; i++) {
             free(curr_command->argv[i]);
         }
