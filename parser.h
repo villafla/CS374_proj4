@@ -26,6 +26,7 @@
 
 #include "smallsh.h"
 
+// Function prototype for parsing user input
 struct command_line *parse_input();
 
 #endif
