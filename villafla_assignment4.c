@@ -162,7 +162,7 @@ void execute_command(struct command_line *cmd, pid_t *bg_pids, int *bg_count) {
         if (cmd->input_file) {
             int input_fd = open(cmd->input_file, O_RDONLY);
             if (input_fd == -1) {
-                fprintf(stderr, "%s: cannot open %s for input\n", cmd->argv[0], cmd->input_file);
+                fprintf(stderr, "cannot open %s for input\n", cmd->input_file);
                 exit(1);
             }
             dup2(input_fd, 0); // Redirect stdin
@@ -179,7 +179,7 @@ void execute_command(struct command_line *cmd, pid_t *bg_pids, int *bg_count) {
         if (cmd->output_file) {
             int output_fd = open(cmd->output_file, O_WRONLY | O_CREAT | O_TRUNC, 0644);
             if (output_fd == -1) {
-                fprintf(stderr, "%s: cannot open %s for output\n", cmd->argv[0], cmd->output_file);
+                fprintf(stderr, "cannot open %s for output\n", cmd->output_file);
                 exit(1);
             }
             dup2(output_fd, 1); // Redirect stdout
