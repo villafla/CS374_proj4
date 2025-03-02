@@ -38,16 +38,16 @@
 
 // Struct to store parsed command
 struct command_line {
-    char *argv[MAX_ARGS + 1];
-    int argc;
-    char *input_file;
-    char *output_file;
-    bool is_bg;
+    char *argv[MAX_ARGS + 1];  // Arguments (NULL-terminated)
+    int argc;                  // Argument count
+    char *input_file;          // Input file (if any)
+    char *output_file;         // Output file (if any)
+    bool is_bg;                // Background process flag
 };
 
 // Global variables
-extern int last_exit_status;
-extern int foreground_only_mode;
+extern int last_exit_status;         // Tracks last exit status
+extern int foreground_only_mode;     // Tracks foreground-only mode, 1 = enabled, 0 = disabled
 
 // Function prototypes
 struct command_line *parse_input();
