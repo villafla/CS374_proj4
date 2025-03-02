@@ -17,7 +17,7 @@
 */
 
 /*
-* Citation: The following program adapts code Exploration: Signal
+* Citation: The following function adapts code Exploration: Signal
 * Handling API and Exploration: Process API - Creating and Terminating Processes. 
 */
 
