@@ -88,14 +88,22 @@ struct command_line *parse_input() {
 
 // Function to handle built-in commands
 // Citation: Module Environment Variables
-bool handle_builtin_commands(struct command_line *cmd) {
+bool handle_builtin_commands(struct command_line *cmd, pid_t *bg_pids, int *bg_count) {
     if (cmd->argc == 0) return false;  // Ignore empty commands
 
+    // if (strcmp(cmd->argv[0], "exit") == 0) {
+    //     // Terminate any background processes before exiting
+    //     fflush(stdout);
+    //     exit(0);
+    // }
     if (strcmp(cmd->argv[0], "exit") == 0) {
-        // Terminate any background processes before exiting
-        fflush(stdout);
+        // Kill all background processes before exiting
+        for (int i = 0; i < *bg_count; i++) { 
+            kill(bg_pids[i], SIGTERM);
+        }
         exit(0);
     }
+    
 
     if (strcmp(cmd->argv[0], "cd") == 0) {
         // Ignore '&' in built-in commands
@@ -143,9 +151,12 @@ void execute_command(struct command_line *cmd, pid_t *bg_pids, int *bg_count) {
         // Child process
 
         // Restore SIGINT default behavior for foreground processes
-        struct sigaction sa_child = {0};
-        sa_child.sa_handler = SIG_DFL;
-        sigaction(SIGINT, &sa_child, NULL);
+        // struct sigaction sa_child = {0};
+        // sa_child.sa_handler = SIG_DFL;
+        // sigaction(SIGINT, &sa_child, NULL);
+        struct sigaction sa_ignore = {0};
+        sa_ignore.sa_handler = SIG_IGN;
+        sigaction(SIGTSTP, &sa_ignore, NULL);
 
         // Handle input redirection
         if (cmd->input_file) {
@@ -276,9 +287,13 @@ int main() {
         curr_command = parse_input();
         if (!curr_command) continue;  // Ignore blank/comment lines
         
-        if (!handle_builtin_commands(curr_command)) {
+        // if (!handle_builtin_commands(curr_command)) {
+        //     execute_command(curr_command, bg_pids, &bg_count);
+        // }
+        if (!handle_builtin_commands(curr_command, bg_pids, &bg_count)) {
             execute_command(curr_command, bg_pids, &bg_count);
         }
+        
 
         // Free memory
         for (int i = 0; i < curr_command->argc; i++) {
