@@ -21,6 +21,20 @@
 * 
 */
 
+/*
+* Function: parse_input
+* ----------------------------------
+* Parses the user's input into a structured command_line struct.
+* Handles input redirection (<), output redirection (>), background execution (&),
+* and stores arguments in a NULL-terminated array.
+* Ignores blank lines and comments starting with '#'.
+* 
+* Arguments: None.
+* 
+* Returns: - A pointer to a dynamically allocated command_line struct.
+*          - NULL if the input is a comment or blank.
+*/
+
 #include "parser.h"
 
 struct command_line *parse_input() {
